@@ -2,7 +2,7 @@
 <html>
 <body>
     <h1>Login</h1>
-    <form action="http://localhost:8080/do_login" method="POST">
+    <form id="form" action="http://localhost:8080/do_login" method="POST">
         <div>
             <label for="name">Username: </label>
             <input type="text" name="name" id="name" value="" />
@@ -12,9 +12,21 @@
             <input type="password" name="password" id="password" value="" />
         </div>
         <div>
-            <button type="submit">Submit</button>
+            <button onclick="show_loading()" type="submit">Submit</button>
         </div>
     </form>
+    <p id="message"></p>
     <p><a href="/">Home</a></p>
 </body>
+<script>
+    async function show_loading() {
+        document.getElementById("form").style.display = 'none';
+        while (true) {
+            for(let i = 1; i <= 3; i++) {
+                document.getElementById("message").innerText = "Logging in" + ".".repeat(i);
+                await new Promise(r => setTimeout(r, 300));
+            }
+        }
+    }
+</script>
 </html>
