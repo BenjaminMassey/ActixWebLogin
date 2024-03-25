@@ -6,6 +6,8 @@ use actix_identity::Identity;
 use actix_web::web;
 use serde::Deserialize;
 use actix_web::web::Redirect;
+use std::fs::File;
+use std::io::{self, prelude::*, BufReader};
 
 #[get("/")]
 async fn index(user: Option<Identity>) -> impl Responder {
@@ -30,11 +32,24 @@ async fn do_login(request: HttpRequest, web::Form(form): web::Form<Info>) -> imp
     // Some kind of authentication should happen here
     // e.g. password-based, biometric, etc.
     // [...]
+    
+    let mut user_exists = false;
+    let file = File::open("accounts.txt").unwrap();
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        if line.unwrap() == form.name.clone() {
+            user_exists = true;
+            break;
+        }
+    }
 
-    // attach a verified user identity to the active session
-    Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
+    if user_exists {
+        // attach a verified user identity to the active session
+        Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
+        return Redirect::to("/").see_other();
+    }
 
-    Redirect::to("/").see_other()
+    Redirect::to("/login").see_other() // TODO: message
 }
 
 #[get("/login")]
@@ -42,11 +57,26 @@ async fn login() -> impl Responder {
     HttpResponse::Ok().body(std::fs::read_to_string("./templates/login.html").unwrap())
 }
 
-#[get("/logout")]
-async fn logout(user: Identity) -> impl Responder {
-    user.logout();
-    
+#[post("/do_create_account")]
+async fn do_create_account(request: HttpRequest, web::Form(form): web::Form<Info>) -> impl Responder {
+    // TODO: do not create if already exist
+    let mut file = File::options().write(true).append(true).open("accounts.txt").unwrap();
+    file.write(format!("{}\n", form.name.clone()).as_bytes()).unwrap();
+    Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
     Redirect::to("/").see_other()
+}
+
+#[get("/create_account")]
+async fn create_account() -> impl Responder {
+    HttpResponse::Ok().body(std::fs::read_to_string("./templates/create_account.html").unwrap())
+}
+
+#[get("/logout")]
+async fn logout(user: Option<Identity>) -> impl Responder {
+    if user.is_some() {
+        user.unwrap().logout();
+    }
+    Redirect::to("/").see_other() // TODO: messaging
 }
 
 #[actix_web::main]
@@ -72,6 +102,8 @@ async fn main() -> std::io::Result<()> {
         .service(login)
         .service(logout)
         .service(do_login)
+        .service(create_account)
+        .service(do_create_account)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
