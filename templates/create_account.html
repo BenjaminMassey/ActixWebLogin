@@ -2,6 +2,7 @@
 <html>
 <body>
     <h1>Create Account</h1>
+    <h3 style="color: red;">[[[MESSAGE]]]</h3>
     <form id="form" action="http://localhost:8080/do_create_account" method="POST">
         <div>
             <label for="name">Username: </label>
@@ -15,7 +16,7 @@
             <button onclick="show_loading()" type="submit">Submit</button>
         </div>
     </form>
-    <p id="message"></p>
+    <p id="loading"></p>
     <p><a href="/">Home</a></p>
 </body>
 <script>
@@ -23,7 +24,7 @@
         document.getElementById("form").style.display = 'none';
         while (true) {
             for(let i = 1; i <= 3; i++) {
-                document.getElementById("message").innerText = "Creating account" + ".".repeat(i);
+                document.getElementById("loading").innerText = "Creating account" + ".".repeat(i);
                 await new Promise(r => setTimeout(r, 300));
             }
         }

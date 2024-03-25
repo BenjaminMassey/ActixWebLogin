@@ -60,17 +60,32 @@ async fn do_login(request: HttpRequest, web::Form(form): web::Form<Info>) -> imp
         return Redirect::to("/").see_other();
     }
 
-    Redirect::to("/login").see_other() // TODO: message
+    Redirect::to("/login/User%20Not%20Found").see_other() // TODO: message
 }
-
 #[get("/login")]
 async fn login() -> impl Responder {
-    HttpResponse::Ok().body(std::fs::read_to_string("./templates/login.html").unwrap())
+    HttpResponse::Ok().body(login_html(""))
+}
+#[get("/login/{message}")]
+async fn login_message(message: Option<web::Path<String>>) -> impl Responder {
+    HttpResponse::Ok().body(login_html(&message.unwrap()))
+}
+fn login_html(message: &str) -> String {
+    let html = std::fs::read_to_string("./templates/login.html").unwrap();
+    html.replace("[[[MESSAGE]]]", message)
 }
 
 #[post("/do_create_account")]
 async fn do_create_account(request: HttpRequest, web::Form(form): web::Form<Info>) -> impl Responder {
-    // TODO: do not create if already exist
+    let file = File::open("accounts.txt").unwrap();
+    let reader = BufReader::new(file);
+    for raw_line in reader.lines() {
+        let line = raw_line.unwrap();
+        let pieces: Vec<&str> = line.split(" : ").collect();
+        if pieces[0].to_owned() == form.name.clone() {
+            return Redirect::to("/create_account/Username%20already%20exists.").see_other();
+        }
+    }
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = Pbkdf2.hash_password(form.password.as_bytes(), &salt).unwrap().to_string();
     let mut file = File::options().write(true).append(true).open("accounts.txt").unwrap();
@@ -78,10 +93,17 @@ async fn do_create_account(request: HttpRequest, web::Form(form): web::Form<Info
     Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
     Redirect::to("/").see_other()
 }
-
 #[get("/create_account")]
 async fn create_account() -> impl Responder {
-    HttpResponse::Ok().body(std::fs::read_to_string("./templates/create_account.html").unwrap())
+    HttpResponse::Ok().body(create_account_html(""))
+}
+#[get("/create_account/{message}")]
+async fn create_account_message(message: Option<web::Path<String>>) -> impl Responder {
+    HttpResponse::Ok().body(create_account_html(&message.unwrap()))
+}
+fn create_account_html(message: &str) -> String {
+    let html = std::fs::read_to_string("./templates/create_account.html").unwrap();
+    html.replace("[[[MESSAGE]]]", message)
 }
 
 #[get("/logout")]
@@ -117,6 +139,8 @@ async fn main() -> std::io::Result<()> {
         .service(do_login)
         .service(create_account)
         .service(do_create_account)
+        .service(login_message)
+        .service(create_account_message)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
