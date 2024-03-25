@@ -220,6 +220,7 @@ dependencies = [
  "actix-identity",
  "actix-session",
  "actix-web",
+ "serde",
 ]
 
 [[package]]

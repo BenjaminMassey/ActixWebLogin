@@ -3,32 +3,50 @@ use actix_identity::IdentityMiddleware;
 use actix_session::{storage::CookieSessionStore, SessionMiddleware};
 use actix_web::{get, post, Responder, HttpRequest, HttpMessage};
 use actix_identity::Identity;
+use actix_web::web;
+use serde::Deserialize;
+use actix_web::web::Redirect;
 
 #[get("/")]
 async fn index(user: Option<Identity>) -> impl Responder {
-    if let Some(user) = user {
-        format!("Welcome! {}", user.id().unwrap())
-    } else {
-        "Welcome Anonymous!".to_owned()
-    }
+    let html = std::fs::read_to_string("./templates/index.html").unwrap();
+    let message = {
+        if let Some(user) = user {
+            format!("You are signed in as: {}", user.id().unwrap())
+        } else {
+            "You are not signed in.".to_owned()
+        }
+    };
+    HttpResponse::Ok().body(html.replace("[[[TEXT]]]", &message))
 }
 
-#[get("/login")]
-async fn login(request: HttpRequest) -> impl Responder {
+#[derive(Deserialize)]
+struct Info {
+    name: String,
+}
+
+#[post("/do_login")]
+async fn do_login(request: HttpRequest, web::Form(form): web::Form<Info>) -> impl Responder {
     // Some kind of authentication should happen here
     // e.g. password-based, biometric, etc.
     // [...]
 
     // attach a verified user identity to the active session
-    Identity::login(&request.extensions(), "User1".into()).unwrap();
+    Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
 
-    HttpResponse::Ok()
+    Redirect::to("/").see_other()
+}
+
+#[get("/login")]
+async fn login() -> impl Responder {
+    HttpResponse::Ok().body(std::fs::read_to_string("./templates/login.html").unwrap())
 }
 
 #[get("/logout")]
 async fn logout(user: Identity) -> impl Responder {
     user.logout();
-    HttpResponse::Ok()
+    
+    Redirect::to("/").see_other()
 }
 
 #[actix_web::main]
@@ -53,6 +71,7 @@ async fn main() -> std::io::Result<()> {
         .service(index)
         .service(login)
         .service(logout)
+        .service(do_login)
     })
     .bind(("127.0.0.1", 8080))?
     .run()
