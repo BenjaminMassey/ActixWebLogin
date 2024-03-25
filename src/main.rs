@@ -7,7 +7,14 @@ use actix_web::web;
 use serde::Deserialize;
 use actix_web::web::Redirect;
 use std::fs::File;
-use std::io::{self, prelude::*, BufReader};
+use std::io::{prelude::*, BufReader};
+use pbkdf2::{
+    password_hash::{
+        rand_core::OsRng,
+        PasswordHash, PasswordHasher, PasswordVerifier, SaltString
+    },
+    Pbkdf2
+};
 
 #[get("/")]
 async fn index(user: Option<Identity>) -> impl Responder {
@@ -25,25 +32,29 @@ async fn index(user: Option<Identity>) -> impl Responder {
 #[derive(Deserialize)]
 struct Info {
     name: String,
+    password: String,
 }
 
 #[post("/do_login")]
 async fn do_login(request: HttpRequest, web::Form(form): web::Form<Info>) -> impl Responder {
-    // Some kind of authentication should happen here
-    // e.g. password-based, biometric, etc.
-    // [...]
-    
-    let mut user_exists = false;
+    let mut verified = false;
     let file = File::open("accounts.txt").unwrap();
     let reader = BufReader::new(file);
-    for line in reader.lines() {
-        if line.unwrap() == form.name.clone() {
-            user_exists = true;
+    for raw_line in reader.lines() {
+        let line = raw_line.unwrap();
+        let pieces: Vec<&str> = line.split(" : ").collect();
+        let this_info = (pieces[0].to_owned(), pieces[1].to_owned());
+        if this_info.0 == form.name.clone() &&
+            Pbkdf2.verify_password(
+                form.password.clone().as_bytes(),
+                &PasswordHash::new(&this_info.1).unwrap()
+            ).is_ok() {
+            verified = true;
             break;
         }
     }
 
-    if user_exists {
+    if verified {
         // attach a verified user identity to the active session
         Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
         return Redirect::to("/").see_other();
@@ -60,8 +71,10 @@ async fn login() -> impl Responder {
 #[post("/do_create_account")]
 async fn do_create_account(request: HttpRequest, web::Form(form): web::Form<Info>) -> impl Responder {
     // TODO: do not create if already exist
+    let salt = SaltString::generate(&mut OsRng);
+    let password_hash = Pbkdf2.hash_password(form.password.as_bytes(), &salt).unwrap().to_string();
     let mut file = File::options().write(true).append(true).open("accounts.txt").unwrap();
-    file.write(format!("{}\n", form.name.clone()).as_bytes()).unwrap();
+    file.write(format!("{} : {}\n", form.name.clone(), password_hash).as_bytes()).unwrap();
     Identity::login(&request.extensions(), form.name.clone().into()).unwrap();
     Redirect::to("/").see_other()
 }
