@@ -7,8 +7,6 @@ use actix_web::web;
 use serde::Deserialize;
 use actix_web::web::Redirect;
 use rusqlite::{Connection, Result};
-use std::fs::File;
-use std::io::{prelude::*, BufReader};
 use pbkdf2::{
     password_hash::{
         rand_core::OsRng,
