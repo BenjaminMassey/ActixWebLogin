@@ -2,7 +2,7 @@
 <html>
 <body>
     <h1>Create Account</h1>
-    <h3 style="color: red;">[[[MESSAGE]]]</h3>
+    <h3 id="message" style="color: red;">[[[MESSAGE]]]</h3>
     <form id="form" action="http://localhost:8080/do_create_account" method="POST">
         <div>
             <label for="name">Username: </label>
@@ -21,6 +21,7 @@
 </body>
 <script>
     async function show_loading() {
+        document.getElementById("message").style.display = 'none';
         document.getElementById("form").style.display = 'none';
         while (true) {
             for(let i = 1; i <= 3; i++) {
