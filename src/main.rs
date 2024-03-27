@@ -6,6 +6,7 @@ use actix_identity::Identity;
 use actix_web::web;
 use serde::Deserialize;
 use actix_web::web::Redirect;
+use std::io::Write;
 use rusqlite::{Connection, Result};
 use pbkdf2::{
     password_hash::{
@@ -124,13 +125,21 @@ fn get_user_info_sqlite(username: String) -> Option<UserInfo> {
     }
 }
 
+fn key_handle() -> Key {
+    if std::path::Path::new("/etc/hosts").exists() {
+        let text = std::fs::read_to_string("key.pbkdf2").unwrap();
+        Key::from(text.as_bytes())
+    } else {
+        let key = Key::generate();
+        let file = std::fs::File::options().create(true).write(true).open("key.pbkdf2");
+        let _ = file.unwrap().write_all(key.master());
+        key
+    }
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // When using `Key::generate()` it is important to initialize outside of the
-    // `HttpServer::new` closure. When deployed the secret key should be read from a
-    // configuration file or environment variables.
-    let secret_key = Key::generate();
-
+    let secret_key = key_handle();
     let conn = Connection::open("accounts.db").unwrap();
     conn.execute(
         "CREATE TABLE IF NOT EXISTS users (
@@ -138,15 +147,9 @@ async fn main() -> std::io::Result<()> {
              password TEXT)",
         [],
     ).unwrap();
-
     HttpServer::new(move || {
         App::new()
-            // Install the identity framework first.
             .wrap(IdentityMiddleware::default())
-            // The identity system is built on top of sessions. You must install the session
-            // middleware to leverage `actix-identity`. The session middleware must be mounted
-            // AFTER the identity middleware: `actix-web` invokes middleware in the OPPOSITE
-            // order of registration when it receives an incoming request.
             .wrap(SessionMiddleware::new(
                 CookieSessionStore::default(),
                 secret_key.clone(),
